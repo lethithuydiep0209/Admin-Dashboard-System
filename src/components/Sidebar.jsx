@@ -10,6 +10,7 @@ const links = [
 
 const Sidebar = ({ open, setOpen }) => (
   <>
+    {open && <div onClick={() => setOpen(false)} className="fixed inset-0 z-20 bg-black/40 md:hidden" />}
     <button
       type="button"
       onClick={() => setOpen((prev) => !prev)}

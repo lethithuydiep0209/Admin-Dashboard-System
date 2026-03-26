@@ -39,6 +39,9 @@ const LoginPage = () => {
       <form onSubmit={handleSubmit} className="w-full max-w-md rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
         <h1 className="text-2xl font-semibold text-gray-900">Admin Login</h1>
         <p className="mt-1 text-sm text-gray-500">Sign in to access your dashboard.</p>
+        <p className="mt-1 text-xs text-gray-400">
+          Tip: use email containing <strong>manager</strong> or <strong>user</strong> to test role-based UI.
+        </p>
 
         <div className="mt-5 space-y-4">
           <div>

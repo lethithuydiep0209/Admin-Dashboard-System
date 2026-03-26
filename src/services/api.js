@@ -23,11 +23,13 @@ export const api = {
       if (!email || !password) {
         throw new Error("Email and password are required");
       }
+      const normalized = email.toLowerCase();
+      const role = normalized.includes("manager") ? "Manager" : normalized.includes("user") ? "User" : "Admin";
       return {
         id: 1,
         name: "Admin User",
         email,
-        role: "Admin",
+        role,
       };
     });
   },

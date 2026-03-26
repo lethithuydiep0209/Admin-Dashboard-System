@@ -10,14 +10,18 @@ import Modal from "../components/Modal";
 import Pagination from "../components/Pagination";
 import { formatCurrency, paginate } from "../utils/format";
 import { validateNumber, validateRequired } from "../utils/validators";
+import { exportToCSV } from "../utils/csv";
+import { useToast } from "../context/ToastContext";
 
 const PAGE_SIZE = 5;
 const defaultForm = { image: "", name: "", price: "", category: "Electronics" };
 
 const ProductsPage = () => {
-  const { globalSearch } = useOutletContext();
+  const { globalSearch, currentUser } = useOutletContext();
   const debouncedSearch = useDebounce(globalSearch);
   const { data, loading, error, refetch } = useFetch(() => api.getAll("products"), []);
+  const { showToast } = useToast();
+  const canManageProducts = currentUser?.role === "Admin" || currentUser?.role === "Manager";
 
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState("All");
@@ -66,14 +70,20 @@ const ProductsPage = () => {
     if (errors.name || errors.price || errors.category) return;
 
     const payload = { ...form, price: Number(form.price), image: form.image || "https://picsum.photos/seed/product/80" };
-    if (editingId) await api.update("products", editingId, payload);
-    else await api.create("products", payload);
+    if (editingId) {
+      await api.update("products", editingId, payload);
+      showToast("Product updated successfully");
+    } else {
+      await api.create("products", payload);
+      showToast("Product created successfully");
+    }
     setModalOpen(false);
     refetch();
   };
 
   const handleDelete = async (id) => {
     await api.remove("products", id);
+    showToast("Product deleted");
     refetch();
   };
 
@@ -83,10 +93,23 @@ const ProductsPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold text-gray-900">Products Management</h2>
-        <button onClick={openCreate} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">
-          Add Product
-        </button>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Products Management</h2>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              exportToCSV(filtered, "products-export");
+              showToast("Products CSV exported", "info");
+            }}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-gray-700 dark:text-gray-100"
+          >
+            Export CSV
+          </button>
+          {canManageProducts && (
+            <button onClick={openCreate} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+              Add Product
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
@@ -100,8 +123,8 @@ const ProductsPage = () => {
       {!filtered.length ? (
         <EmptyState title="No products found" />
       ) : (
-        <div className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
-          <div className="overflow-x-auto">
+        <div className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[680px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-gray-500">
@@ -110,16 +133,42 @@ const ProductsPage = () => {
               </thead>
               <tbody>
                 {paginated.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60">
                     <td className="px-4 py-3"><img src={row.image} alt={row.name} className="h-10 w-10 rounded object-cover" /></td>
                     <td className="px-4 py-3">{row.name}</td>
                     <td className="px-4 py-3">{formatCurrency(row.price)}</td>
                     <td className="px-4 py-3">{row.category}</td>
-                    <td className="px-4 py-3"><div className="flex gap-2"><button onClick={() => openEdit(row)} className="text-primary hover:underline">Edit</button><button onClick={() => handleDelete(row.id)} className="text-red-500 hover:underline">Delete</button></div></td>
+                    <td className="px-4 py-3">
+                      {canManageProducts ? (
+                        <div className="flex gap-2"><button onClick={() => openEdit(row)} className="text-primary hover:underline">Edit</button><button onClick={() => handleDelete(row.id)} className="text-red-500 hover:underline">Delete</button></div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Read only</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {paginated.map((row) => (
+              <div key={row.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <img src={row.image} alt={row.name} className="h-12 w-12 rounded object-cover" />
+                  <div>
+                    <p className="font-medium dark:text-gray-100">{row.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{row.category}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-sm dark:text-gray-200">{formatCurrency(row.price)}</p>
+                {canManageProducts && (
+                  <div className="mt-2 flex gap-3 text-sm">
+                    <button onClick={() => openEdit(row)} className="text-primary">Edit</button>
+                    <button onClick={() => handleDelete(row.id)} className="text-red-500">Delete</button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
           <div className="px-4 pb-4">
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />

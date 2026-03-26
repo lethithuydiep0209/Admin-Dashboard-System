@@ -10,14 +10,18 @@ import Modal from "../components/Modal";
 import Pagination from "../components/Pagination";
 import { paginate } from "../utils/format";
 import { validateEmail, validateRequired } from "../utils/validators";
+import { exportToCSV } from "../utils/csv";
+import { useToast } from "../context/ToastContext";
 
 const PAGE_SIZE = 5;
 const defaultForm = { name: "", email: "", role: "User", status: "Active" };
 
 const UsersPage = () => {
-  const { globalSearch } = useOutletContext();
+  const { globalSearch, currentUser } = useOutletContext();
   const debouncedSearch = useDebounce(globalSearch);
   const { data, loading, error, refetch } = useFetch(() => api.getAll("users"), []);
+  const { showToast } = useToast();
+  const canManageUsers = currentUser?.role === "Admin";
 
   const [page, setPage] = useState(1);
   const [role, setRole] = useState("All");
@@ -66,8 +70,10 @@ const UsersPage = () => {
 
     if (editingId) {
       await api.update("users", editingId, form);
+      showToast("User updated successfully");
     } else {
       await api.create("users", form);
+      showToast("User created successfully");
     }
     setModalOpen(false);
     refetch();
@@ -75,6 +81,7 @@ const UsersPage = () => {
 
   const handleDelete = async (id) => {
     await api.remove("users", id);
+    showToast("User deleted");
     refetch();
   };
 
@@ -84,10 +91,23 @@ const UsersPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold text-gray-900">Users Management</h2>
-        <button onClick={openCreate} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">
-          Add User
-        </button>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Users Management</h2>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              exportToCSV(filtered, "users-export");
+              showToast("Users CSV exported", "info");
+            }}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-gray-700 dark:text-gray-100"
+          >
+            Export CSV
+          </button>
+          {canManageUsers && (
+            <button onClick={openCreate} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+              Add User
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -107,8 +127,8 @@ const UsersPage = () => {
       {!filtered.length ? (
         <EmptyState title="No users found" />
       ) : (
-        <div className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
-          <div className="overflow-x-auto">
+        <div className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[650px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-gray-500">
@@ -121,21 +141,43 @@ const UsersPage = () => {
               </thead>
               <tbody>
                 {paginated.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60">
                     <td className="px-4 py-3">{row.name}</td>
                     <td className="px-4 py-3">{row.email}</td>
                     <td className="px-4 py-3">{row.role}</td>
                     <td className="px-4 py-3">{row.status}</td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button onClick={() => openEdit(row)} className="text-primary hover:underline">Edit</button>
-                        <button onClick={() => handleDelete(row.id)} className="text-red-500 hover:underline">Delete</button>
-                      </div>
+                      {canManageUsers ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => openEdit(row)} className="text-primary hover:underline">Edit</button>
+                          <button onClick={() => handleDelete(row.id)} className="text-red-500 hover:underline">Delete</button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Read only</span>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="space-y-3 p-3 md:hidden">
+            {paginated.map((row) => (
+              <div key={row.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                <p className="font-medium dark:text-gray-100">{row.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{row.email}</p>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="dark:text-gray-200">{row.role}</span>
+                  <span className="dark:text-gray-200">{row.status}</span>
+                </div>
+                {canManageUsers && (
+                  <div className="mt-2 flex gap-3 text-sm">
+                    <button onClick={() => openEdit(row)} className="text-primary">Edit</button>
+                    <button onClick={() => handleDelete(row.id)} className="text-red-500">Delete</button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
           <div className="px-4 pb-4">
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
